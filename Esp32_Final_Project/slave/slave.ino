@@ -1,82 +1,91 @@
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <LiquidCrystal_I2C.h> // Make sure this is ESP32-compatible
 #include <WiFi.h>
 #include <esp_now.h>
 
-#define I2C_ADDR 0x27 // Adjust if your LCD has a different I2C address
+#define I2C_ADDR 0x27 // Adjust if needed
 #define LCD_COLS 16
 #define LCD_ROWS 2
 
+#define LEFT_MOTOR_FORWARD_PIN 32
+#define LEFT_MOTOR_BACKWARD_PIN 33
+#define RIGHT_MOTOR_FORWARD_PIN 26
+#define RIGHT_MOTOR_BACKWARD_PIN 27
+
 LiquidCrystal_I2C lcd(I2C_ADDR, LCD_COLS, LCD_ROWS);
 
-// Define the structure for incoming data
 typedef struct {
-  int messageID; // 1 for Forward, 2 for Backward, 3 for Turn, 0 for Clear Screen
+  int messageID; // 1 = Forward, 2 = Backward, 3 = Spin
 } ButtonMessage;
 
-// Callback function for receiving ESP-NOW messages
-void onReceive(const esp_now_recv_info_t *info, const uint8_t *incomingData, int len) {
+void onReceive(const uint8_t *macAddr, const uint8_t *incomingData, int len) {
   ButtonMessage msg;
   memcpy(&msg, incomingData, sizeof(msg));
 
-  // Debugging: Print the incoming message
   Serial.print("Received Message ID: ");
   Serial.println(msg.messageID);
 
-  // Clear the LCD if no button is pressed
-  if (msg.messageID == 0) {
-    Serial.println("Clearing the LCD display.");
-    lcd.clear();
-    return;
-  }
+  lcd.clear(); 
 
-  // Update the LCD display with the corresponding message
-  lcd.clear(); // Clear the display before showing a new message
   switch (msg.messageID) {
     case 1:
-      Serial.println("Displaying: Forward");
+      Serial.println("Forward");
       lcd.print("Forward");
+      digitalWrite(LEFT_MOTOR_FORWARD_PIN, HIGH);
+      digitalWrite(LEFT_MOTOR_BACKWARD_PIN, LOW);
+      digitalWrite(RIGHT_MOTOR_FORWARD_PIN, HIGH);
+      digitalWrite(RIGHT_MOTOR_BACKWARD_PIN, LOW);
       break;
+
     case 2:
-      Serial.println("Displaying: Backward");
+      Serial.println("Backward");
       lcd.print("Backward");
+      digitalWrite(LEFT_MOTOR_FORWARD_PIN, LOW);
+      digitalWrite(LEFT_MOTOR_BACKWARD_PIN, HIGH);
+      digitalWrite(RIGHT_MOTOR_FORWARD_PIN, LOW);
+      digitalWrite(RIGHT_MOTOR_BACKWARD_PIN, HIGH);
       break;
+
     case 3:
-      Serial.println("Displaying: Turn");
-      lcd.print("Turn");
+      Serial.println("Spin");
+      lcd.print("Spin");
+      digitalWrite(LEFT_MOTOR_FORWARD_PIN, HIGH);
+      digitalWrite(LEFT_MOTOR_BACKWARD_PIN, LOW);
+      digitalWrite(RIGHT_MOTOR_FORWARD_PIN, LOW);
+      digitalWrite(RIGHT_MOTOR_BACKWARD_PIN, LOW);
       break;
+
     default:
-      Serial.println("Displaying: Unknown Command");
-      lcd.print("Unknown Command");
+      Serial.println("Clearing LCD");
+      lcd.print("No Command");
+      digitalWrite(LEFT_MOTOR_FORWARD_PIN, LOW);
+      digitalWrite(LEFT_MOTOR_BACKWARD_PIN, LOW);
+      digitalWrite(RIGHT_MOTOR_FORWARD_PIN, LOW);
+      digitalWrite(RIGHT_MOTOR_BACKWARD_PIN, LOW);
   }
 }
 
 void setup() {
-  Serial.begin(115200); // Start Serial communication for debugging
-  Serial.println("Initializing Slave...");
-
-  // Initialize the LCD
+  Serial.begin(115200);
+  Wire.begin(21, 22);
   lcd.init();
   lcd.backlight();
 
-  // Initialize WiFi in STA mode
-  WiFi.mode(WIFI_STA);
-  Serial.println("WiFi set to STA mode.");
+  pinMode(LEFT_MOTOR_FORWARD_PIN, OUTPUT);
+  pinMode(LEFT_MOTOR_BACKWARD_PIN, OUTPUT);
+  pinMode(RIGHT_MOTOR_FORWARD_PIN, OUTPUT);
+  pinMode(RIGHT_MOTOR_BACKWARD_PIN, OUTPUT);
 
-  // Initialize ESP-NOW
+  WiFi.mode(WIFI_STA);
   if (esp_now_init() != ESP_OK) {
-    Serial.println("ESP-NOW Initialization Failed");
+    Serial.println("ESP-NOW Init Failed");
     return;
   }
-  Serial.println("ESP-NOW Initialized.");
 
-  // Register the callback function
   esp_now_register_recv_cb(onReceive);
-  Serial.println("ESP-NOW receive callback registered.");
-
-  Serial.println("Slave is ready.");
+  Serial.println("ESP-NOW Receiver Ready.");
 }
 
 void loop() {
-  // Nothing to do here; ESP-NOW handles communication
+  // Nothing needed; ESP-NOW handles communication
 }
